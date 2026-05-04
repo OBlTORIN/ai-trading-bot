@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Obito AI XAUUSD Bot</title>
+
+<style>
+body {
+    background: #0f172a;
+    color: white;
+    font-family: Arial;
+    text-align: center;
+}
+
+.card {
+    background: #1e293b;
+    padding: 20px;
+    margin: 20px auto;
+    border-radius: 10px;
+    width: 320px;
+}
+
+input {
+    padding: 10px;
+    margin: 10px;
+    width: 220px;
+}
+
+button {
+    padding: 10px;
+    cursor: pointer;
+}
+
+h1 {
+    margin-top: 20px;
+}
+</style>
+</head>
+
+<body>
+
+<h1>🤖 Obito AI XAUUSD Bot</h1>
+
+<div class="card">
+    <label>💰 Balance (USD $)</label><br>
+    <input type="number" id="balance" placeholder="Enter balance in USD">
+    <br>
+    <button onclick="getSignal()">Get Signal</button>
+</div>
+
+<div class="card">
+    <h2 id="signal">---</h2>
+    Entry: <span id="entry">---</span><br>
+    SL: <span id="sl">---</span><br>
+    TP: <span id="tp">---</span><br>
+    Confidence: <span id="confidence">---</span>
+</div>
+
+<script>
+async function getSignal() {
+    try {
+        let res = await fetch("http://localhost:8000/signal");
+
+        if (!res.ok) {
+            throw new Error("Server error");
+        }
+
+        let data = await res.json();
+
+        if(data.error){
+            alert(data.error);
+            return;
+        }
+
+        document.getElementById("signal").innerText = data.signal;
+        document.getElementById("entry").innerText = data.entry;
+        document.getElementById("sl").innerText = data.sl;
+        document.getElementById("tp").innerText = data.tp;
+        document.getElementById("confidence").innerText = data.confidence;
+
+    } catch (err) {
+        alert("Backend connect nahi ho raha");
+        console.log(err);
+    }
+}
+
+// AUTO REFRESH
+setInterval(getSignal, 10000);
+</script>
+
+</body>
+</html>
