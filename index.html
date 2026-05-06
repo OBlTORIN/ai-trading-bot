@@ -156,7 +156,7 @@ async function analyzeTrade(){
     try{
 
         const response = await fetch(
-            `https://YOUR-RAILWAY-URL.up.railway.app/signal?balance=${balance}`
+            `https://ai-trading-bot-production-064d.up.railway.app/signal?balance=${balance}`
         );
 
         const data = await response.json();
