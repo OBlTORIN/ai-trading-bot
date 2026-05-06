@@ -1,6 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
+
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
@@ -83,7 +85,7 @@ button:hover{
 }
 
 .signal{
-    font-size:40px;
+    font-size:55px;
     font-weight:bold;
 }
 
@@ -95,9 +97,18 @@ button:hover{
     color:#ef4444;
 }
 
+.result{
+    text-align:center;
+}
+
 .result p{
-    font-size:20px;
-    margin:12px 0;
+    font-size:24px;
+    margin:14px 0;
+}
+
+hr{
+    border:1px solid #374151;
+    margin:20px 0;
 }
 
 #loading{
@@ -109,6 +120,7 @@ button:hover{
 }
 
 </style>
+
 </head>
 
 <body>
@@ -153,8 +165,7 @@ button:hover{
 
             <div class="card result">
 
-                <p>
-                    Signal:
+                <p style="text-align:center;">
                     <span id="signal" class="signal">---</span>
                 </p>
 
@@ -173,26 +184,26 @@ button:hover{
                     <span id="tp">---</span>
                 </p>
 
-                <p>
-                    Confidence:
-                    <span id="confidence">---</span>
-                </p>
-
                 <hr>
 
                 <p>
-                    Recommended Lot:
+                    Lot Size:
                     <span id="lot">---</span>
                 </p>
 
                 <p>
-                    TP Profit:
+                    Profit:
                     <span id="profit">---</span>
                 </p>
 
                 <p>
-                    SL Loss:
+                    Loss:
                     <span id="loss">---</span>
+                </p>
+
+                <p>
+                    Confidence:
+                    <span id="confidence">---</span>
                 </p>
 
             </div>
@@ -206,6 +217,7 @@ button:hover{
 <script>
 
 new TradingView.widget({
+
     "width":"100%",
     "height":700,
     "symbol":"OANDA:XAUUSD",
@@ -219,6 +231,7 @@ new TradingView.widget({
     "hide_side_toolbar":false,
     "allow_symbol_change":false,
     "container_id":"tradingview_chart"
+
 });
 
 async function getSignal(){
@@ -227,6 +240,7 @@ async function getSignal(){
         document.getElementById("balance").value;
 
     if(balance === ""){
+
         alert("Enter balance first");
         return;
     }
@@ -262,7 +276,7 @@ async function getSignal(){
         document.getElementById("confidence").innerText =
             data.confidence;
 
-        // BUY SELL COLOR
+        // COLOR
 
         if(data.signal === "BUY"){
 
@@ -275,7 +289,7 @@ async function getSignal(){
                 "signal sell";
         }
 
-        // LOT SIZE CALCULATION
+        // LOT SIZE
 
         const balanceValue =
             parseFloat(balance);
@@ -289,24 +303,19 @@ async function getSignal(){
         const tp =
             parseFloat(data.tp);
 
-        // 2% RISK
-
         const riskPercent = 2;
 
         const riskAmount =
             (balanceValue * riskPercent) / 100;
 
-        // SL DISTANCE
-
         const slDistance =
             Math.abs(entry - sl);
-
-        // LOT SIZE
 
         let lotSize =
             (riskAmount / slDistance) / 10;
 
         if(lotSize < 0.01){
+
             lotSize = 0.01;
         }
 
@@ -315,18 +324,22 @@ async function getSignal(){
         // PROFIT LOSS
 
         const profitUSD = (
+
             Math.abs(tp - entry)
             * lotSize
             * 10
+
         ).toFixed(2);
 
         const lossUSD = (
+
             Math.abs(entry - sl)
             * lotSize
             * 10
+
         ).toFixed(2);
 
-        // UPDATE UI
+        // UI UPDATE
 
         document.getElementById("lot").innerText =
             lotSize + " Lots";
@@ -338,6 +351,7 @@ async function getSignal(){
             "$" + lossUSD;
 
     }
+
     catch(error){
 
         document.getElementById("loading").style.display =
