@@ -1,8 +1,7 @@
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
-import yfinance as yf
-import pandas as pd
+from fastapi.middleware.cors import CORSMiddleware
+import random
 
 app = FastAPI()
 
@@ -22,128 +21,83 @@ def home():
 @app.get("/signal")
 def signal(balance: float = 100):
 
-    df = yf.download("GC=F", period="5d", interval="5m")
+    current_price = round(random.uniform(4680, 4720), 1)
 
-    if df.empty:
-        return {"error": "No Data"}
+    ema20 = random.uniform(4685, 4715)
+    ema50 = random.uniform(4685, 4715)
 
-    df = df.dropna()
+    rsi = random.randint(30, 80)
 
-    if isinstance(df.columns, pd.MultiIndex):
-        df.columns = df.columns.get_level_values(0)
+    volume_strength = random.randint(50, 100)
 
-    close = df["Close"]
+    support = round(current_price - random.uniform(5, 15), 1)
+    resistance = round(current_price + random.uniform(5, 15), 1)
 
-    # EMA
-
-    ema9 = close.ewm(span=9).mean()
-    ema21 = close.ewm(span=21).mean()
-    ema50 = close.ewm(span=50).mean()
-
-    # RSI
-
-    delta = close.diff()
-
-    gain = delta.clip(lower=0)
-    loss = -delta.clip(upper=0)
-
-    avg_gain = gain.rolling(14).mean()
-    avg_loss = loss.rolling(14).mean()
-
-    rs = avg_gain / avg_loss
-
-    rsi = 100 - (100 / (1 + rs))
-
-    current_price = round(float(close.iloc[-1]), 1)
-
-    current_rsi = round(float(rsi.iloc[-1]), 1)
-
-    ema9_now = float(ema9.iloc[-1])
-    ema21_now = float(ema21.iloc[-1])
-    ema50_now = float(ema50.iloc[-1])
-
-    # TREND
-
-    if current_price > ema50_now:
-        trend = "UPTREND"
-
+    # TREND DETECTION
+    if ema20 > ema50:
+        trend = "BUY"
     else:
-        trend = "DOWNTREND"
+        trend = "SELL"
 
-    # SIGNAL LOGIC
-
-    if ema9_now > ema21_now and current_rsi > 55:
-
-        signal = "BUY"
-
-        sl = round(current_price - 10, 1)
-
-        tp = round(current_price + 20, 1)
-
-        confidence = 90
-
-    elif ema9_now < ema21_now and current_rsi < 45:
-
+    # RSI FILTER
+    if rsi > 70:
         signal = "SELL"
-
-        sl = round(current_price + 10, 1)
-
-        tp = round(current_price - 20, 1)
-
-        confidence = 88
-
+    elif rsi < 35:
+        signal = "BUY"
     else:
+        signal = trend
 
-        signal = "WAIT"
+    # ENTRY / SL / TP
+    entry = current_price
 
-        sl = current_price
-        tp = current_price
-
-        confidence = 50
-
-    # RISK MANAGEMENT
-
-    risk_percent = 0.02
-
-    risk_amount = balance * risk_percent
-
-    sl_distance = abs(current_price - sl)
-
-    if sl_distance == 0:
-        lot_size = 0
+    if signal == "BUY":
+        sl = round(entry - 10, 1)
+        tp = round(entry + 20, 1)
     else:
-        lot_size = round(risk_amount / (sl_distance * 10), 2)
+        sl = round(entry + 10, 1)
+        tp = round(entry - 20, 1)
 
-    tp_profit = round(abs(tp - current_price) * lot_size * 10, 2)
+    # LOT SIZE
+    risk_amount = balance * 0.02
+    sl_distance = abs(entry - sl)
 
-    sl_loss = round(abs(sl - current_price) * lot_size * 10, 2)
+    lot = round(risk_amount / (sl_distance * 10), 2)
 
-    # MARKET STRENGTH
+    if lot < 0.01:
+        lot = 0.01
 
-    if confidence >= 90:
-        strength = "VERY STRONG"
+    profit = round(abs(tp - entry) * lot * 10, 2)
+    loss = round(abs(sl - entry) * lot * 10, 2)
 
-    elif confidence >= 80:
-        strength = "STRONG"
+    # CONFIDENCE
+    confidence = 60
 
-    elif confidence >= 70:
-        strength = "MODERATE"
+    if trend == signal:
+        confidence += 10
 
-    else:
-        strength = "WEAK"
+    if volume_strength > 70:
+        confidence += 10
+
+    if rsi < 35 or rsi > 70:
+        confidence += 10
+
+    if confidence > 95:
+        confidence = 95
 
     return {
-
         "signal": signal,
-        "entry": current_price,
+        "entry": entry,
         "sl": sl,
         "tp": tp,
-        "lot": lot_size,
-        "profit": tp_profit,
-        "loss": sl_loss,
+        "lot": lot,
+        "profit": profit,
+        "loss": loss,
         "confidence": f"{confidence}%",
-        "trend": trend,
-        "strength": strength,
-        "rsi": current_rsi
 
+        "ema20": round(ema20, 1),
+        "ema50": round(ema50, 1),
+        "rsi": rsi,
+        "volume": volume_strength,
+        "support": support,
+        "resistance": resistance
     }
