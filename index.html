@@ -1,212 +1,124 @@
 <!DOCTYPE html>
-<html lang="en">
-
+<html>
 <head>
+    <title>XAUUSD Bot</title>
 
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://s3.tradingview.com/tv.js"></script>
 
-<title>XAUUSD BOT</title>
+    <style>
 
-<script src="https://s3.tradingview.com/tv.js"></script>
+        body{
+            margin:0;
+            padding:0;
+            background:#050816;
+            font-family:Arial;
+            color:white;
+        }
 
-<style>
+        h1{
+            text-align:center;
+            padding:20px;
+            font-size:48px;
+        }
 
-body{
-    margin:0;
-    font-family:Arial;
-    background:#0b1220;
-    color:white;
-}
+        .main{
+            display:flex;
+            gap:20px;
+            padding:20px;
+            flex-wrap:wrap;
+            justify-content:center;
+        }
 
-.container{
-    padding:20px;
-}
+        .chart-box{
+            width:70%;
+            min-width:700px;
+            background:#0d1328;
+            border-radius:20px;
+            padding:15px;
+            box-shadow:0 0 20px rgba(0,255,255,0.2);
+        }
 
-.title{
-    text-align:center;
-    font-size:45px;
-    font-weight:bold;
-    margin-bottom:20px;
-}
+        .side-box{
+            width:320px;
+            background:#0d1328;
+            border-radius:20px;
+            padding:20px;
+            box-shadow:0 0 20px rgba(0,255,255,0.2);
+        }
 
-.main{
-    display:flex;
-    gap:20px;
-    flex-wrap:wrap;
-}
+        input{
+            width:100%;
+            padding:15px;
+            border:none;
+            border-radius:12px;
+            margin-top:10px;
+            margin-bottom:15px;
+            font-size:18px;
+        }
 
-.chart-box{
-    flex:3;
-    min-width:700px;
-    background:#111827;
-    border-radius:20px;
-    overflow:hidden;
-    padding:10px;
-}
+        button{
+            width:100%;
+            padding:15px;
+            border:none;
+            border-radius:12px;
+            background:#00d9ff;
+            color:white;
+            font-size:22px;
+            font-weight:bold;
+            cursor:pointer;
+        }
 
-.side-box{
-    flex:1;
-    min-width:320px;
-}
+        .result{
+            margin-top:25px;
+            background:#111a35;
+            padding:25px;
+            border-radius:20px;
+            text-align:center;
+            font-size:22px;
+            line-height:1.8;
+        }
 
-.card{
-    background:#111827;
-    padding:20px;
-    border-radius:20px;
-    margin-bottom:20px;
-}
+        .buy{
+            color:#00ff66;
+            font-size:60px;
+            font-weight:bold;
+        }
 
-input{
-    width:100%;
-    padding:15px;
-    border:none;
-    border-radius:10px;
-    margin-top:10px;
-    margin-bottom:15px;
-    font-size:18px;
-    box-sizing:border-box;
-}
+        .sell{
+            color:#ff4d4d;
+            font-size:60px;
+            font-weight:bold;
+        }
 
-button{
-    width:100%;
-    padding:15px;
-    border:none;
-    border-radius:10px;
-    background:#06b6d4;
-    color:white;
-    font-size:20px;
-    cursor:pointer;
-    font-weight:bold;
-}
-
-button:hover{
-    background:#0891b2;
-}
-
-.signal{
-    font-size:55px;
-    font-weight:bold;
-}
-
-.buy{
-    color:#22c55e;
-}
-
-.sell{
-    color:#ef4444;
-}
-
-.result{
-    text-align:center;
-}
-
-.result p{
-    font-size:24px;
-    margin:14px 0;
-}
-
-hr{
-    border:1px solid #374151;
-    margin:20px 0;
-}
-
-#loading{
-    display:none;
-    text-align:center;
-    margin-top:20px;
-    font-size:20px;
-    color:#06b6d4;
-}
-
-</style>
+    </style>
 
 </head>
 
 <body>
 
-<div class="container">
+<h1>XAUUSD AI SIGNALS</h1>
 
-    <div class="title">
-        XAUUSD AI SIGNALS
+<div class="main">
+
+    <div class="chart-box">
+
+        <div id="tradingview_chart"></div>
+
     </div>
 
-    <div class="main">
+    <div class="side-box">
 
-        <div class="chart-box">
+        <h2>⚙️ Trade Setup</h2>
 
-            <div id="tradingview_chart"></div>
+        <label>💰 Balance (USD $)</label>
 
-        </div>
+        <input type="number" id="balance" value="100">
 
-        <div class="side-box">
+        <button onclick="analyzeTrade()">🔥 Analyze Trade</button>
 
-            <div class="card">
+        <div class="result" id="result">
 
-                <h2>⚙️ Trade Setup</h2>
-
-                <label>💰 Balance (USD $)</label>
-
-                <input
-                    type="number"
-                    id="balance"
-                    placeholder="Enter Balance"
-                >
-
-                <button onclick="getSignal()">
-                    🔥 Analyze Trade
-                </button>
-
-                <div id="loading">
-                    Analyzing Chart...
-                </div>
-
-            </div>
-
-            <div class="card result">
-
-                <p style="text-align:center;">
-                    <span id="signal" class="signal">---</span>
-                </p>
-
-                <p>
-                    Entry:
-                    <span id="entry">---</span>
-                </p>
-
-                <p>
-                    Stop Loss:
-                    <span id="sl">---</span>
-                </p>
-
-                <p>
-                    Take Profit:
-                    <span id="tp">---</span>
-                </p>
-
-                <hr>
-
-                <p>
-                    Lot Size:
-                    <span id="lot">---</span>
-                </p>
-
-                <p>
-                    Profit:
-                    <span id="profit">---</span>
-                </p>
-
-                <p>
-                    Loss:
-                    <span id="loss">---</span>
-                </p>
-
-                <p>
-                    Confidence:
-                    <span id="confidence">---</span>
-                </p>
-
-            </div>
+            Waiting For Analysis...
 
         </div>
 
@@ -219,147 +131,81 @@ hr{
 new TradingView.widget({
 
     "width":"100%",
-    "height":700,
+    "height":650,
     "symbol":"OANDA:XAUUSD",
-    "interval":"1",
+    "interval":"5",
     "timezone":"Asia/Kolkata",
     "theme":"dark",
     "style":"1",
     "locale":"en",
-    "toolbar_bg":"#111827",
+    "toolbar_bg":"#0d1328",
     "enable_publishing":false,
-    "hide_side_toolbar":false,
     "allow_symbol_change":false,
     "container_id":"tradingview_chart"
 
 });
 
-async function getSignal(){
+async function analyzeTrade(){
 
-    const balance =
-        document.getElementById("balance").value;
+    const balance = document.getElementById("balance").value;
 
-    if(balance === ""){
+    const result = document.getElementById("result");
 
-        alert("Enter balance first");
-        return;
-    }
-
-    document.getElementById("loading").style.display =
-        "block";
+    result.innerHTML = "Analyzing Trade...";
 
     try{
 
         const response = await fetch(
-            "https://ai-trading-bot-production-064d.up.railway.app/signal"
+            `https://YOUR-RAILWAY-URL.up.railway.app/signal?balance=${balance}`
         );
 
         const data = await response.json();
 
-        document.getElementById("loading").style.display =
-            "none";
+        const signalClass =
+            data.signal === "BUY" ? "buy" : "sell";
 
-        // SIGNAL DATA
+        result.innerHTML = `
 
-        document.getElementById("signal").innerText =
-            data.signal;
+            <div class="${signalClass}">
+                ${data.signal}
+            </div>
 
-        document.getElementById("entry").innerText =
-            data.entry;
+            <br>
 
-        document.getElementById("sl").innerText =
-            data.sl;
+            Entry: ${data.entry}
 
-        document.getElementById("tp").innerText =
-            data.tp;
+            <br>
 
-        document.getElementById("confidence").innerText =
-            data.confidence;
+            Stop Loss: ${data.sl}
 
-        // COLOR
+            <br>
 
-        if(data.signal === "BUY"){
+            Take Profit: ${data.tp}
 
-            document.getElementById("signal").className =
-                "signal buy";
+            <br><br>
 
-        }else{
+            Lot Size: ${data.lot} Lots
 
-            document.getElementById("signal").className =
-                "signal sell";
-        }
+            <br>
 
-        // LOT SIZE
+            Profit: $${data.profit}
 
-        const balanceValue =
-            parseFloat(balance);
+            <br>
 
-        const entry =
-            parseFloat(data.entry);
+            Loss: $${data.loss}
 
-        const sl =
-            parseFloat(data.sl);
+            <br>
 
-        const tp =
-            parseFloat(data.tp);
+            Confidence: ${data.confidence}
 
-        const riskPercent = 2;
-
-        const riskAmount =
-            (balanceValue * riskPercent) / 100;
-
-        const slDistance =
-            Math.abs(entry - sl);
-
-        let lotSize =
-            (riskAmount / slDistance) / 10;
-
-        if(lotSize < 0.01){
-
-            lotSize = 0.01;
-        }
-
-        lotSize = lotSize.toFixed(2);
-
-        // PROFIT LOSS
-
-        const profitUSD = (
-
-            Math.abs(tp - entry)
-            * lotSize
-            * 10
-
-        ).toFixed(2);
-
-        const lossUSD = (
-
-            Math.abs(entry - sl)
-            * lotSize
-            * 10
-
-        ).toFixed(2);
-
-        // UI UPDATE
-
-        document.getElementById("lot").innerText =
-            lotSize + " Lots";
-
-        document.getElementById("profit").innerText =
-            "$" + profitUSD;
-
-        document.getElementById("loss").innerText =
-            "$" + lossUSD;
+        `;
 
     }
 
     catch(error){
 
-        document.getElementById("loading").style.display =
-            "none";
+        result.innerHTML = "Backend Connect Error";
 
-        alert("Backend connect nahi ho raha");
-
-        console.log(error);
     }
 
 }
