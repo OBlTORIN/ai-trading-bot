@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
 <title>XAUUSD BOT</title>
 
 <script src="https://s3.tradingview.com/tv.js"></script>
@@ -44,7 +45,7 @@ body{
 
 .side-box{
     flex:1;
-    min-width:280px;
+    min-width:320px;
 }
 
 .card{
@@ -62,6 +63,7 @@ input{
     margin-top:10px;
     margin-bottom:15px;
     font-size:18px;
+    box-sizing:border-box;
 }
 
 button{
@@ -73,6 +75,7 @@ button{
     color:white;
     font-size:20px;
     cursor:pointer;
+    font-weight:bold;
 }
 
 button:hover{
@@ -80,7 +83,7 @@ button:hover{
 }
 
 .signal{
-    font-size:35px;
+    font-size:40px;
     font-weight:bold;
 }
 
@@ -94,13 +97,15 @@ button:hover{
 
 .result p{
     font-size:20px;
+    margin:12px 0;
 }
 
 #loading{
     display:none;
     text-align:center;
     margin-top:20px;
-    font-size:22px;
+    font-size:20px;
+    color:#06b6d4;
 }
 
 </style>
@@ -111,7 +116,7 @@ button:hover{
 <div class="container">
 
     <div class="title">
-        XAUUSD BOT
+        XAUUSD AI SIGNALS
     </div>
 
     <div class="main">
@@ -126,14 +131,18 @@ button:hover{
 
             <div class="card">
 
-                <h2>Trade Setup</h2>
+                <h2>⚙️ Trade Setup</h2>
 
-                <label>Balance (USD $)</label>
+                <label>💰 Balance (USD $)</label>
 
-                <input type="number" id="balance" placeholder="Enter Balance">
+                <input
+                    type="number"
+                    id="balance"
+                    placeholder="Enter Balance"
+                >
 
                 <button onclick="getSignal()">
-                    Analyze Trade
+                    🔥 Analyze Trade
                 </button>
 
                 <div id="loading">
@@ -169,6 +178,23 @@ button:hover{
                     <span id="confidence">---</span>
                 </p>
 
+                <hr>
+
+                <p>
+                    Recommended Lot:
+                    <span id="lot">---</span>
+                </p>
+
+                <p>
+                    TP Profit:
+                    <span id="profit">---</span>
+                </p>
+
+                <p>
+                    SL Loss:
+                    <span id="loss">---</span>
+                </p>
+
             </div>
 
         </div>
@@ -191,20 +217,22 @@ new TradingView.widget({
     "toolbar_bg":"#111827",
     "enable_publishing":false,
     "hide_side_toolbar":false,
-    "allow_symbol_change":true,
+    "allow_symbol_change":false,
     "container_id":"tradingview_chart"
 });
 
 async function getSignal(){
 
-    const balance = document.getElementById("balance").value;
+    const balance =
+        document.getElementById("balance").value;
 
     if(balance === ""){
         alert("Enter balance first");
         return;
     }
 
-    document.getElementById("loading").style.display = "block";
+    document.getElementById("loading").style.display =
+        "block";
 
     try{
 
@@ -214,25 +242,106 @@ async function getSignal(){
 
         const data = await response.json();
 
-        document.getElementById("loading").style.display = "none";
+        document.getElementById("loading").style.display =
+            "none";
 
-        document.getElementById("signal").innerText = data.signal;
-        document.getElementById("entry").innerText = data.entry;
-        document.getElementById("sl").innerText = data.sl;
-        document.getElementById("tp").innerText = data.tp;
-        document.getElementById("confidence").innerText = data.confidence;
+        // SIGNAL DATA
+
+        document.getElementById("signal").innerText =
+            data.signal;
+
+        document.getElementById("entry").innerText =
+            data.entry;
+
+        document.getElementById("sl").innerText =
+            data.sl;
+
+        document.getElementById("tp").innerText =
+            data.tp;
+
+        document.getElementById("confidence").innerText =
+            data.confidence;
+
+        // BUY SELL COLOR
 
         if(data.signal === "BUY"){
-            document.getElementById("signal").className = "signal buy";
+
+            document.getElementById("signal").className =
+                "signal buy";
+
+        }else{
+
+            document.getElementById("signal").className =
+                "signal sell";
         }
-        else{
-            document.getElementById("signal").className = "signal sell";
+
+        // LOT SIZE CALCULATION
+
+        const balanceValue =
+            parseFloat(balance);
+
+        const entry =
+            parseFloat(data.entry);
+
+        const sl =
+            parseFloat(data.sl);
+
+        const tp =
+            parseFloat(data.tp);
+
+        // 2% RISK
+
+        const riskPercent = 2;
+
+        const riskAmount =
+            (balanceValue * riskPercent) / 100;
+
+        // SL DISTANCE
+
+        const slDistance =
+            Math.abs(entry - sl);
+
+        // LOT SIZE
+
+        let lotSize =
+            (riskAmount / slDistance) / 10;
+
+        if(lotSize < 0.01){
+            lotSize = 0.01;
         }
+
+        lotSize = lotSize.toFixed(2);
+
+        // PROFIT LOSS
+
+        const profitUSD = (
+            Math.abs(tp - entry)
+            * lotSize
+            * 10
+        ).toFixed(2);
+
+        const lossUSD = (
+            Math.abs(entry - sl)
+            * lotSize
+            * 10
+        ).toFixed(2);
+
+        // UPDATE UI
+
+        document.getElementById("lot").innerText =
+            lotSize + " Lots";
+
+        document.getElementById("profit").innerText =
+            "$" + profitUSD;
+
+        document.getElementById("loss").innerText =
+            "$" + lossUSD;
 
     }
     catch(error){
 
-        document.getElementById("loading").style.display = "none";
+        document.getElementById("loading").style.display =
+            "none";
 
         alert("Backend connect nahi ho raha");
 
