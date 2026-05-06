@@ -1,7 +1,9 @@
 <!DOCTYPE html>
 <html>
+
 <head>
-    <title>XAUUSD Bot</title>
+
+    <title>XAUUSD AI SIGNALS</title>
 
     <script src="https://s3.tradingview.com/tv.js"></script>
 
@@ -11,56 +13,54 @@
             margin:0;
             padding:0;
             background:#050816;
-            font-family:Arial;
             color:white;
+            font-family:Arial;
         }
 
         h1{
             text-align:center;
+            font-size:50px;
             padding:20px;
-            font-size:48px;
         }
 
         .main{
             display:flex;
             gap:20px;
             padding:20px;
-            flex-wrap:wrap;
             justify-content:center;
+            flex-wrap:wrap;
         }
 
         .chart-box{
             width:70%;
             min-width:700px;
             background:#0d1328;
-            border-radius:20px;
             padding:15px;
-            box-shadow:0 0 20px rgba(0,255,255,0.2);
+            border-radius:20px;
         }
 
         .side-box{
-            width:320px;
+            width:330px;
             background:#0d1328;
-            border-radius:20px;
             padding:20px;
-            box-shadow:0 0 20px rgba(0,255,255,0.2);
+            border-radius:20px;
         }
 
         input{
             width:100%;
             padding:15px;
             border:none;
-            border-radius:12px;
+            border-radius:10px;
             margin-top:10px;
             margin-bottom:15px;
-            font-size:18px;
+            font-size:20px;
         }
 
         button{
             width:100%;
             padding:15px;
             border:none;
-            border-radius:12px;
+            border-radius:10px;
             background:#00d9ff;
             color:white;
             font-size:22px;
@@ -69,13 +69,13 @@
         }
 
         .result{
-            margin-top:25px;
+            margin-top:20px;
             background:#111a35;
-            padding:25px;
             border-radius:20px;
+            padding:25px;
             text-align:center;
-            font-size:22px;
             line-height:1.8;
+            font-size:22px;
         }
 
         .buy{
@@ -86,6 +86,12 @@
 
         .sell{
             color:#ff4d4d;
+            font-size:60px;
+            font-weight:bold;
+        }
+
+        .wait{
+            color:#ffd000;
             font-size:60px;
             font-weight:bold;
         }
@@ -114,7 +120,9 @@
 
         <input type="number" id="balance" value="100">
 
-        <button onclick="analyzeTrade()">🔥 Analyze Trade</button>
+        <button onclick="analyzeTrade()">
+            🔥 Analyze Trade
+        </button>
 
         <div class="result" id="result">
 
@@ -153,7 +161,7 @@ async function analyzeTrade(){
     const result =
         document.getElementById("result");
 
-    result.innerHTML = "Analyzing Trade...";
+    result.innerHTML = "Analyzing Market...";
 
     try{
 
@@ -163,10 +171,15 @@ async function analyzeTrade(){
 
         const data = await response.json();
 
-        const signalClass =
-            data.signal === "BUY"
-            ? "buy"
-            : "sell";
+        let signalClass = "wait";
+
+        if(data.signal === "BUY"){
+            signalClass = "buy";
+        }
+
+        if(data.signal === "SELL"){
+            signalClass = "sell";
+        }
 
         result.innerHTML = `
 
@@ -202,21 +215,40 @@ async function analyzeTrade(){
 
             Confidence: ${data.confidence}
 
+            <br>
+
+            Trend: ${data.trend}
+
+            <br>
+
+            Strength: ${data.strength}
+
+            <br>
+
+            RSI: ${data.rsi}
+
         `;
 
     }
 
     catch(error){
 
-        console.log(error);
-
-        result.innerHTML =
-            "Backend Connect Error";
+        result.innerHTML = "Backend Connect Error";
 
     }
 
 }
+
+// AUTO REFRESH
+
+setInterval(() => {
+
+    analyzeTrade();
+
+}, 15000);
+
 </script>
 
 </body>
+
 </html>
