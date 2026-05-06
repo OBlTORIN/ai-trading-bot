@@ -40,7 +40,7 @@
         }
 
         .side-box{
-            width:330px;
+            width:350px;
             background:#0d1328;
             padding:20px;
             border-radius:20px;
@@ -90,10 +90,13 @@
             font-weight:bold;
         }
 
-        .wait{
-            color:#ffd000;
-            font-size:60px;
-            font-weight:bold;
+        .extra-info{
+            margin-top:20px;
+            border-top:1px solid #2d3a63;
+            padding-top:15px;
+            font-size:18px;
+            line-height:1.6;
+            text-align:left;
         }
 
     </style>
@@ -171,11 +174,7 @@ async function analyzeTrade(){
 
         const data = await response.json();
 
-        let signalClass = "wait";
-
-        if(data.signal === "BUY"){
-            signalClass = "buy";
-        }
+        let signalClass = "buy";
 
         if(data.signal === "SELL"){
             signalClass = "sell";
@@ -215,17 +214,21 @@ async function analyzeTrade(){
 
             Confidence: ${data.confidence}
 
-            <br>
+            <div class="extra-info">
 
-            Trend: ${data.trend}
+                <p>EMA 20: ${data.ema20}</p>
 
-            <br>
+                <p>EMA 50: ${data.ema50}</p>
 
-            Strength: ${data.strength}
+                <p>RSI: ${data.rsi}</p>
 
-            <br>
+                <p>Volume Strength: ${data.volume}%</p>
 
-            RSI: ${data.rsi}
+                <p>Support: ${data.support}</p>
+
+                <p>Resistance: ${data.resistance}</p>
+
+            </div>
 
         `;
 
