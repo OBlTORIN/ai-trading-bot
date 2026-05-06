@@ -214,31 +214,48 @@ async function analyzeTrade(){
 
             Confidence: ${data.confidence}
 
-            <div class="extra-info">
-
-                <p>EMA 20: ${data.ema20}</p>
-
-                <p>EMA 50: ${data.ema50}</p>
-
-                <p>RSI: ${data.rsi}</p>
-
-                <p>Volume Strength: ${data.volume}%</p>
-
-                <p>Support: ${data.support}</p>
-
-                <p>Resistance: ${data.resistance}</p>
-
-            </div>
-
+            
         `;
 
     }
 
     catch(error){
 
-        result.innerHTML = "Backend Connect Error";
+        result.innerHTML = `
 
-    }
+    <div class="${signalClass}">
+        ${data.signal}
+    </div>
+
+    <br>
+
+    Entry: ${data.entry}
+
+    <br>
+
+    Stop Loss: ${data.sl}
+
+    <br>
+
+    Take Profit: ${data.tp}
+
+    <br><br>
+
+    Lot Size: ${data.lot} Lots
+
+    <br>
+
+    Profit: $${data.profit}
+
+    <br>
+
+    Loss: $${data.loss}
+
+    <br>
+
+    Confidence: ${data.confidence}
+
+`;
 
 }
 
