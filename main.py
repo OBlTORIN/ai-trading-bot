@@ -1,15 +1,9 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-
 import yfinance as yf
 import pandas as pd
-import numpy as np
 
 app = FastAPI()
-
-# =========================
-# CORS
-# =========================
 
 app.add_middleware(
     CORSMiddleware,
@@ -19,293 +13,91 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# =========================
-# HOME
-# =========================
-
 @app.get("/")
 def home():
-
-    return {
-        "status": "working"
-    }
-
-# =========================
-# SIGNAL
-# =========================
+    return {"status": "working"}
 
 @app.get("/signal")
-def signal():
-
-    try:
-
-        # =========================
-        # DOWNLOAD XAUUSD DATA
-        # =========================
-
-        df = yf.download(
-            "GC=F",
-            period="7d",
-            interval="5m"
-        )
-
-        df = df.dropna()
-
-        # FIX MULTI INDEX
-
-        if isinstance(df.columns, pd.MultiIndex):
-            df.columns = df.columns.get_level_values(0)
-
-        # =========================
-        # EMA
-        # =========================
-
-        df["EMA9"] = (
-            df["Close"]
-            .ewm(span=9, adjust=False)
-            .mean()
-        )
-
-        df["EMA21"] = (
-            df["Close"]
-            .ewm(span=21, adjust=False)
-            .mean()
-        )
+def signal(balance: float = 100):
 
-        df["EMA50"] = (
-            df["Close"]
-            .ewm(span=50, adjust=False)
-            .mean()
-        )
-
-        # =========================
-        # RSI
-        # =========================
+    df = yf.download("GC=F", period="5d", interval="5m")
 
-        delta = df["Close"].diff()
+    if df.empty:
+        return {"error": "No Data"}
 
-        gain = (
-            delta.where(delta > 0, 0)
-            .rolling(14)
-            .mean()
-        )
+    df = df.dropna()
 
-        loss = (
-            -delta.where(delta < 0, 0)
-            .rolling(14)
-            .mean()
-        )
+    if isinstance(df.columns, pd.MultiIndex):
+        df.columns = df.columns.get_level_values(0)
 
-        rs = gain / loss
+    close = df["Close"]
 
-        df["RSI"] = (
-            100 - (100 / (1 + rs))
-        )
+    # EMA
 
-        # =========================
-        # MACD
-        # =========================
+    ema9 = close.ewm(span=9).mean()
+    ema21 = close.ewm(span=21).mean()
 
-        ema12 = (
-            df["Close"]
-            .ewm(span=12, adjust=False)
-            .mean()
-        )
+    # RSI
 
-        ema26 = (
-            df["Close"]
-            .ewm(span=26, adjust=False)
-            .mean()
-        )
+    delta = close.diff()
 
-        df["MACD"] = ema12 - ema26
+    gain = delta.clip(lower=0)
+    loss = -delta.clip(upper=0)
 
-        df["Signal_Line"] = (
-            df["MACD"]
-            .ewm(span=9, adjust=False)
-            .mean()
-        )
+    avg_gain = gain.rolling(14).mean()
+    avg_loss = loss.rolling(14).mean()
 
-        # =========================
-        # SUPPORT RESISTANCE
-        # =========================
+    rs = avg_gain / avg_loss
 
-        support = round(
-            df["Low"].tail(30).min(),
-            1
-        )
+    rsi = 100 - (100 / (1 + rs))
 
-        resistance = round(
-            df["High"].tail(30).max(),
-            1
-        )
+    current_price = round(float(close.iloc[-1]), 1)
 
-        # =========================
-        # VOLUME
-        # =========================
+    current_rsi = float(rsi.iloc[-1])
 
-        avg_volume = (
-            df["Volume"]
-            .tail(20)
-            .mean()
-        )
+    # SIGNAL LOGIC
 
-        current_volume = (
-            df["Volume"]
-            .iloc[-1]
-        )
+    if ema9.iloc[-1] > ema21.iloc[-1] and current_rsi > 50:
 
-        volume_strength = (
-            current_volume > avg_volume
-        )
+        signal = "BUY"
 
-        # =========================
-        # LAST CANDLE
-        # =========================
+        sl = round(current_price - 10, 1)
 
-        last = df.iloc[-1]
+        tp = round(current_price + 20, 1)
 
-        entry = round(last["Close"], 1)
+        confidence = 88
 
-        signal = "WAIT"
+    else:
 
-        confidence = 50
+        signal = "SELL"
 
-        sl = entry
-        tp = entry
+        sl = round(current_price + 10, 1)
 
-        # =========================
-        # BUY CONDITIONS
-        # =========================
+        tp = round(current_price - 20, 1)
 
-        buy_score = 0
+        confidence = 86
 
-        if last["EMA9"] > last["EMA21"]:
-            buy_score += 1
+    # RISK MANAGEMENT
 
-        if last["EMA21"] > last["EMA50"]:
-            buy_score += 1
+    risk_amount = balance * 0.02
 
-        if last["RSI"] > 55:
-            buy_score += 1
+    sl_distance = abs(current_price - sl)
 
-        if last["MACD"] > last["Signal_Line"]:
-            buy_score += 1
+    lot_size = round(risk_amount / (sl_distance * 10), 2)
 
-        if volume_strength:
-            buy_score += 1
+    tp_profit = round(abs(tp - current_price) * lot_size * 10, 2)
 
-        # =========================
-        # SELL CONDITIONS
-        # =========================
+    sl_loss = round(abs(sl - current_price) * lot_size * 10, 2)
 
-        sell_score = 0
+    return {
 
-        if last["EMA9"] < last["EMA21"]:
-            sell_score += 1
+        "signal": signal,
+        "entry": current_price,
+        "sl": sl,
+        "tp": tp,
+        "lot": lot_size,
+        "profit": tp_profit,
+        "loss": sl_loss,
+        "confidence": f"{confidence}%"
 
-        if last["EMA21"] < last["EMA50"]:
-            sell_score += 1
-
-        if last["RSI"] < 45:
-            sell_score += 1
-
-        if last["MACD"] < last["Signal_Line"]:
-            sell_score += 1
-
-        if volume_strength:
-            sell_score += 1
-
-        # =========================
-        # FINAL DECISION
-        # =========================
-
-        if buy_score >= 4:
-
-            signal = "BUY"
-
-            sl = round(
-                support - 2,
-                1
-            )
-
-            tp = round(
-                entry + ((entry - sl) * 2),
-                1
-            )
-
-            confidence = (
-                70 + (buy_score * 5)
-            )
-
-        elif sell_score >= 4:
-
-            signal = "SELL"
-
-            sl = round(
-                resistance + 2,
-                1
-            )
-
-            tp = round(
-                entry - ((sl - entry) * 2),
-                1
-            )
-
-            confidence = (
-                70 + (sell_score * 5)
-            )
-
-        else:
-
-            signal = "WAIT"
-
-            sl = round(entry - 5, 1)
-
-            tp = round(entry + 5, 1)
-
-            confidence = 55
-
-        # =========================
-        # RETURN
-        # =========================
-
-        return {
-
-            "signal": signal,
-
-            "entry": entry,
-
-            "sl": sl,
-
-            "tp": tp,
-
-            "confidence": f"{confidence}%",
-
-            "ema9": round(last["EMA9"], 1),
-
-            "ema21": round(last["EMA21"], 1),
-
-            "ema50": round(last["EMA50"], 1),
-
-            "rsi": round(last["RSI"], 1),
-
-            "macd": round(last["MACD"], 2),
-
-            "support": support,
-
-            "resistance": resistance,
-
-            "volume_strength": bool(volume_strength),
-
-            "buy_score": buy_score,
-
-            "sell_score": sell_score
-
-        }
-
-    except Exception as e:
-
-        return {
-            "error": str(e)
-        }
+    }
