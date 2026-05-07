@@ -11,6 +11,8 @@ import tensorflow as tf
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense
 
+import MetaTrader5 as mt5
+
 import json
 import os
 
@@ -31,7 +33,24 @@ def home():
 
 
 # =========================
-# MEMORY FILE
+# MT5 LOGIN
+# =========================
+
+MT5_LOGIN = 12345678
+MT5_PASSWORD = "YOUR_PASSWORD"
+MT5_SERVER = "YOUR_BROKER_SERVER"
+
+mt5.initialize()
+
+mt5.login(
+    MT5_LOGIN,
+    password=MT5_PASSWORD,
+    server=MT5_SERVER
+)
+
+
+# =========================
+# MEMORY
 # =========================
 
 MEMORY_FILE = "memory.json"
@@ -240,6 +259,67 @@ def train_model(df):
 
 
 # =========================
+# EXECUTE TRADE
+# =========================
+
+def execute_trade(signal, lot, sl, tp):
+
+    symbol = "XAUUSD"
+
+    symbol_info = mt5.symbol_info(symbol)
+
+    if symbol_info is None:
+
+        return "Symbol Not Found"
+
+    tick = mt5.symbol_info_tick(symbol)
+
+    if signal == "BUY":
+
+        order_type = mt5.ORDER_TYPE_BUY
+
+        price = tick.ask
+
+    else:
+
+        order_type = mt5.ORDER_TYPE_SELL
+
+        price = tick.bid
+
+    request = {
+
+        "action": mt5.TRADE_ACTION_DEAL,
+
+        "symbol": symbol,
+
+        "volume": lot,
+
+        "type": order_type,
+
+        "price": price,
+
+        "sl": sl,
+
+        "tp": tp,
+
+        "deviation": 20,
+
+        "magic": 123456,
+
+        "comment": "AI BOT",
+
+        "type_time": mt5.ORDER_TIME_GTC,
+
+        "type_filling": mt5.ORDER_FILLING_IOC,
+
+    }
+
+    result = mt5.order_send(request)
+
+    return str(result)
+
+
+# =========================
 # MAIN SIGNAL
 # =========================
 
@@ -278,30 +358,7 @@ def signal(balance: float = 100):
         1
     )
 
-    # VOLATILITY
-
-    volatility = "NORMAL"
-
-    if atr > 15:
-        volatility = "HIGH"
-
-    elif atr < 5:
-        volatility = "LOW"
-
-    # RISK SCORE
-
-    risk_score = 50
-
-    if volatility == "HIGH":
-        risk_score += 30
-
-    if abs(prediction - 0.5) < 0.1:
-        risk_score += 20
-
-    if risk_score > 100:
-        risk_score = 100
-
-    # FINAL SIGNAL
+    # SIGNAL
 
     if prediction > 0.55:
 
@@ -353,17 +410,9 @@ def signal(balance: float = 100):
     if confidence < 50:
         confidence = 50
 
-    # SMART LOT SIZE
+    # LOT SIZE
 
-    risk_percent = 0.02
-
-    if volatility == "HIGH":
-        risk_percent = 0.01
-
-    if confidence < 60:
-        risk_percent = 0.005
-
-    risk_amount = balance * risk_percent
+    risk_amount = balance * 0.01
 
     sl_distance = abs(
         current_price - sl
@@ -383,6 +432,21 @@ def signal(balance: float = 100):
 
     if lot < 0.01:
         lot = 0.01
+
+    # AUTO EXECUTION
+
+    trade_result = "No Trade"
+
+    if final_signal != "WAIT":
+
+        trade_result = execute_trade(
+
+            final_signal,
+            lot,
+            sl,
+            tp
+
+        )
 
     # PROFIT LOSS
 
@@ -404,30 +468,6 @@ def signal(balance: float = 100):
 
     )
 
-    # MEMORY
-
-    memory = load_memory()
-
-    total = memory["total"]
-
-    wins = memory["wins"]
-
-    losses = memory["losses"]
-
-    if total > 0:
-
-        win_rate = round(
-
-            (wins / total) * 100,
-
-            1
-
-        )
-
-    else:
-
-        win_rate = 0
-
     return {
 
         "signal": final_signal,
@@ -446,47 +486,7 @@ def signal(balance: float = 100):
 
         "confidence": f"{confidence}%",
 
-        "risk_score": f"{risk_score}%",
-
-        "volatility": volatility,
-
-        "total_trades": total,
-
-        "wins": wins,
-
-        "losses": losses,
-
-        "win_rate": f"{win_rate}%"
-
-    }
-
-
-# =========================
-# UPDATE RESULT
-# =========================
-
-@app.get("/update_result")
-def update_result(result: str):
-
-    memory = load_memory()
-
-    memory["total"] += 1
-
-    if result == "win":
-
-        memory["wins"] += 1
-
-    elif result == "loss":
-
-        memory["losses"] += 1
-
-    save_memory(memory)
-
-    return {
-
-        "message": "updated",
-
-        "memory": memory
+        "execution": trade_result
 
     }
 
