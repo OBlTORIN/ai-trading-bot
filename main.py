@@ -22,7 +22,7 @@ def home():
 
 
 # =========================
-# ANALYSIS FUNCTION
+# ANALYZE TIMEFRAME
 # =========================
 
 def analyze_timeframe(interval):
@@ -40,9 +40,19 @@ def analyze_timeframe(interval):
 
     close = df["Close"]
 
+    high = df["High"]
+
+    low = df["Low"]
+
+    open_price = df["Open"]
+
+    # EMA
+
     ema20 = close.ewm(span=20).mean()
 
     ema50 = close.ewm(span=50).mean()
+
+    # RSI
 
     delta = close.diff()
 
@@ -69,6 +79,18 @@ def analyze_timeframe(interval):
 
     current_rsi = float(rsi.iloc[-1])
 
+    # SUPPORT / RESISTANCE
+
+    support = round(
+        float(low.tail(20).min()),
+        1
+    )
+
+    resistance = round(
+        float(high.tail(20).max()),
+        1
+    )
+
     # TREND
 
     if current_ema20 > current_ema50:
@@ -87,10 +109,53 @@ def analyze_timeframe(interval):
     else:
         signal = trend
 
+    # BREAKOUT DETECTION
+
+    breakout = False
+
+    if current_price > resistance:
+        breakout = True
+        signal = "BUY"
+
+    if current_price < support:
+        breakout = True
+        signal = "SELL"
+
+    # CANDLE STRENGTH
+
+    candle_body = abs(
+        close.iloc[-1] - open_price.iloc[-1]
+    )
+
+    candle_range = (
+        high.iloc[-1] - low.iloc[-1]
+    )
+
+    candle_strength = 0
+
+    if candle_range > 0:
+
+        candle_strength = round(
+            (candle_body / candle_range) * 100,
+            1
+        )
+
     return {
+
         "signal": signal,
+
         "price": current_price,
-        "rsi": round(current_rsi,1)
+
+        "rsi": round(current_rsi,1),
+
+        "support": support,
+
+        "resistance": resistance,
+
+        "breakout": breakout,
+
+        "candle_strength": candle_strength
+
     }
 
 
@@ -119,27 +184,45 @@ def signal(balance: float = 100):
 
     current_price = tf5["price"]
 
+    support = tf5["support"]
+
+    resistance = tf5["resistance"]
+
+    breakout = tf5["breakout"]
+
+    candle_strength = tf5["candle_strength"]
+
+    confidence = 60
+
     # FINAL DECISION
 
     if buy_count >= 2:
 
         final_signal = "BUY"
 
-        sl = round(current_price - 10,1)
+        sl = support
 
-        tp = round(current_price + 20,1)
+        tp = round(
+            current_price +
+            ((current_price - sl) * 2),
+            1
+        )
 
-        confidence = 85 + (buy_count * 3)
+        confidence += 15
 
     elif sell_count >= 2:
 
         final_signal = "SELL"
 
-        sl = round(current_price + 10,1)
+        sl = resistance
 
-        tp = round(current_price - 20,1)
+        tp = round(
+            current_price -
+            ((sl - current_price) * 2),
+            1
+        )
 
-        confidence = 85 + (sell_count * 3)
+        confidence += 15
 
     else:
 
@@ -149,7 +232,18 @@ def signal(balance: float = 100):
 
         tp = current_price
 
-        confidence = 50
+    # BREAKOUT BONUS
+
+    if breakout:
+        confidence += 10
+
+    # STRONG CANDLE BONUS
+
+    if candle_strength > 70:
+        confidence += 10
+
+    if confidence > 95:
+        confidence = 95
 
     # LOT SIZE
 
@@ -168,7 +262,7 @@ def signal(balance: float = 100):
     if lot < 0.01:
         lot = 0.01
 
-    # PROFIT LOSS
+    # PROFIT / LOSS
 
     profit = round(
         abs(tp - current_price) * lot * 10,
