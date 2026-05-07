@@ -92,6 +92,10 @@ def add_features(df):
 
     close = df["Close"]
 
+    high = df["High"]
+
+    low = df["Low"]
+
     # EMA
 
     df["EMA20"] = (
@@ -118,6 +122,35 @@ def add_features(df):
 
     df["RSI"] = (
         100 - (100 / (1 + rs))
+    )
+
+    # ATR
+
+    high_low = high - low
+
+    high_close = np.abs(
+        high - close.shift()
+    )
+
+    low_close = np.abs(
+        low - close.shift()
+    )
+
+    ranges = pd.concat([
+
+        high_low,
+        high_close,
+        low_close
+
+    ], axis=1)
+
+    true_range = np.max(
+        ranges,
+        axis=1
+    )
+
+    df["ATR"] = (
+        true_range.rolling(14).mean()
     )
 
     # TARGET
@@ -147,7 +180,8 @@ def train_model(df):
 
         "EMA20",
         "EMA50",
-        "RSI"
+        "RSI",
+        "ATR"
 
     ]
 
@@ -161,7 +195,7 @@ def train_model(df):
         Dense(
             32,
             activation="relu",
-            input_shape=(3,)
+            input_shape=(4,)
         )
     )
 
@@ -220,11 +254,17 @@ def signal(balance: float = 100):
 
     latest = df.iloc[-1]
 
+    atr = round(
+        float(latest["ATR"]),
+        1
+    )
+
     features = np.array([[
 
         latest["EMA20"],
         latest["EMA50"],
-        latest["RSI"]
+        latest["RSI"],
+        latest["ATR"]
 
     ]])
 
@@ -238,15 +278,28 @@ def signal(balance: float = 100):
         1
     )
 
-    support = round(
-        float(df["Low"].tail(20).min()),
-        1
-    )
+    # VOLATILITY
 
-    resistance = round(
-        float(df["High"].tail(20).max()),
-        1
-    )
+    volatility = "NORMAL"
+
+    if atr > 15:
+        volatility = "HIGH"
+
+    elif atr < 5:
+        volatility = "LOW"
+
+    # RISK SCORE
+
+    risk_score = 50
+
+    if volatility == "HIGH":
+        risk_score += 30
+
+    if abs(prediction - 0.5) < 0.1:
+        risk_score += 20
+
+    if risk_score > 100:
+        risk_score = 100
 
     # FINAL SIGNAL
 
@@ -254,30 +307,28 @@ def signal(balance: float = 100):
 
         final_signal = "BUY"
 
-        sl = support
+        sl = round(
+            current_price - (atr * 1.5),
+            1
+        )
 
         tp = round(
-
-            current_price +
-            ((current_price - sl) * 2),
-
+            current_price + (atr * 3),
             1
-
         )
 
     elif prediction < 0.45:
 
         final_signal = "SELL"
 
-        sl = resistance
+        sl = round(
+            current_price + (atr * 1.5),
+            1
+        )
 
         tp = round(
-
-            current_price -
-            ((sl - current_price) * 2),
-
+            current_price - (atr * 3),
             1
-
         )
 
     else:
@@ -300,19 +351,25 @@ def signal(balance: float = 100):
     )
 
     if confidence < 50:
-
         confidence = 50
 
-    # LOT SIZE
+    # SMART LOT SIZE
 
-    risk_amount = balance * 0.02
+    risk_percent = 0.02
+
+    if volatility == "HIGH":
+        risk_percent = 0.01
+
+    if confidence < 60:
+        risk_percent = 0.005
+
+    risk_amount = balance * risk_percent
 
     sl_distance = abs(
         current_price - sl
     )
 
     if sl_distance == 0:
-
         sl_distance = 1
 
     lot = round(
@@ -325,10 +382,9 @@ def signal(balance: float = 100):
     )
 
     if lot < 0.01:
-
         lot = 0.01
 
-    # PROFIT / LOSS
+    # PROFIT LOSS
 
     profit = round(
 
@@ -389,6 +445,10 @@ def signal(balance: float = 100):
         "loss": loss,
 
         "confidence": f"{confidence}%",
+
+        "risk_score": f"{risk_score}%",
+
+        "volatility": volatility,
 
         "total_trades": total,
 
