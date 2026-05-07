@@ -21,38 +21,28 @@ def home():
     return FileResponse("index.html")
 
 
-@app.get("/signal")
-def signal(balance: float = 100):
+# =========================
+# ANALYSIS FUNCTION
+# =========================
 
-    # REAL XAUUSD DATA
+def analyze_timeframe(interval):
 
     df = yf.download(
         "GC=F",
         period="5d",
-        interval="5m"
+        interval=interval
     )
 
-    if df.empty:
-        return {
-            "error": "No Market Data"
-        }
-
     df = df.dropna()
-
-    # FIX COLUMNS
 
     if isinstance(df.columns, pd.MultiIndex):
         df.columns = df.columns.get_level_values(0)
 
     close = df["Close"]
 
-    # REAL EMA
-
     ema20 = close.ewm(span=20).mean()
 
     ema50 = close.ewm(span=50).mean()
-
-    # REAL RSI
 
     delta = close.diff()
 
@@ -68,39 +58,16 @@ def signal(balance: float = 100):
 
     rsi = 100 - (100 / (1 + rs))
 
-    # CURRENT VALUES
-
     current_price = round(
         float(close.iloc[-1]),
         1
     )
 
-    current_ema20 = round(
-        float(ema20.iloc[-1]),
-        1
-    )
+    current_ema20 = float(ema20.iloc[-1])
 
-    current_ema50 = round(
-        float(ema50.iloc[-1]),
-        1
-    )
+    current_ema50 = float(ema50.iloc[-1])
 
-    current_rsi = round(
-        float(rsi.iloc[-1]),
-        1
-    )
-
-    # SUPPORT / RESISTANCE
-
-    support = round(
-        float(df["Low"].tail(20).min()),
-        1
-    )
-
-    resistance = round(
-        float(df["High"].tail(20).max()),
-        1
-    )
+    current_rsi = float(rsi.iloc[-1])
 
     # TREND
 
@@ -109,47 +76,86 @@ def signal(balance: float = 100):
     else:
         trend = "SELL"
 
-    # SIGNAL LOGIC
+    # RSI FILTER
 
     if current_rsi > 70:
-
         signal = "SELL"
 
     elif current_rsi < 35:
-
         signal = "BUY"
 
     else:
-
         signal = trend
 
-    # ENTRY / SL / TP
+    return {
+        "signal": signal,
+        "price": current_price,
+        "rsi": round(current_rsi,1)
+    }
 
-    entry = current_price
 
-    if signal == "BUY":
+# =========================
+# MAIN SIGNAL
+# =========================
 
-        sl = support
+@app.get("/signal")
+def signal(balance: float = 100):
 
-        tp = round(
-            entry + ((entry - sl) * 2),
-            1
-        )
+    tf1 = analyze_timeframe("1m")
+
+    tf5 = analyze_timeframe("5m")
+
+    tf15 = analyze_timeframe("15m")
+
+    signals = [
+        tf1["signal"],
+        tf5["signal"],
+        tf15["signal"]
+    ]
+
+    buy_count = signals.count("BUY")
+
+    sell_count = signals.count("SELL")
+
+    current_price = tf5["price"]
+
+    # FINAL DECISION
+
+    if buy_count >= 2:
+
+        final_signal = "BUY"
+
+        sl = round(current_price - 10,1)
+
+        tp = round(current_price + 20,1)
+
+        confidence = 85 + (buy_count * 3)
+
+    elif sell_count >= 2:
+
+        final_signal = "SELL"
+
+        sl = round(current_price + 10,1)
+
+        tp = round(current_price - 20,1)
+
+        confidence = 85 + (sell_count * 3)
 
     else:
 
-        sl = resistance
+        final_signal = "WAIT"
 
-        tp = round(
-            entry - ((sl - entry) * 2),
-            1
-        )
+        sl = current_price
+
+        tp = current_price
+
+        confidence = 50
 
     # LOT SIZE
 
     risk_amount = balance * 0.02
 
-    sl_distance = abs(entry - sl)
+    sl_distance = abs(current_price - sl)
 
     if sl_distance == 0:
         sl_distance = 1
@@ -162,39 +168,23 @@ def signal(balance: float = 100):
     if lot < 0.01:
         lot = 0.01
 
-    # PROFIT / LOSS
+    # PROFIT LOSS
 
     profit = round(
-        abs(tp - entry) * lot * 10,
+        abs(tp - current_price) * lot * 10,
         2
     )
 
     loss = round(
-        abs(sl - entry) * lot * 10,
+        abs(sl - current_price) * lot * 10,
         2
     )
 
-    # CONFIDENCE
-
-    confidence = 60
-
-    if trend == signal:
-        confidence += 10
-
-    if current_rsi < 35 or current_rsi > 70:
-        confidence += 10
-
-    if abs(current_ema20 - current_ema50) > 3:
-        confidence += 10
-
-    if confidence > 95:
-        confidence = 95
-
     return {
 
-        "signal": signal,
+        "signal": final_signal,
 
-        "entry": entry,
+        "entry": current_price,
 
         "sl": sl,
 
