@@ -3,7 +3,7 @@
 
 <head>
 
-    <title>XAUUSD AI SIGNALS</title>
+    <title>XAUUSD AI TERMINAL</title>
 
     <style>
 
@@ -17,7 +17,7 @@
 
         h1{
             text-align:center;
-            font-size:50px;
+            font-size:48px;
             padding:20px;
         }
 
@@ -30,7 +30,7 @@
         }
 
         .chart-box{
-            width:70%;
+            width:68%;
             min-width:700px;
             background:#0d1328;
             padding:15px;
@@ -38,7 +38,13 @@
         }
 
         .side-box{
-            width:350px;
+            width:360px;
+            display:flex;
+            flex-direction:column;
+            gap:20px;
+        }
+
+        .panel{
             background:#0d1328;
             padding:20px;
             border-radius:20px;
@@ -67,10 +73,6 @@
         }
 
         .result{
-            margin-top:20px;
-            background:#111a35;
-            border-radius:20px;
-            padding:25px;
             text-align:center;
             line-height:1.8;
             font-size:22px;
@@ -88,13 +90,29 @@
             font-weight:bold;
         }
 
+        .wait{
+            color:#ffd000;
+            font-size:60px;
+            font-weight:bold;
+        }
+
+        .stats{
+            line-height:2;
+            font-size:18px;
+        }
+
+        .status{
+            color:#00ff66;
+            font-weight:bold;
+        }
+
     </style>
 
 </head>
 
 <body>
 
-<h1>XAUUSD AI SIGNALS</h1>
+<h1>XAUUSD AI TERMINAL</h1>
 
 <div class="main">
 
@@ -103,7 +121,7 @@
         <iframe
             src="https://s.tradingview.com/widgetembed/?symbol=OANDA:XAUUSD&interval=5&theme=dark&style=1&timezone=Asia/Kolkata"
             width="100%"
-            height="650"
+            height="700"
             frameborder="0"
             scrolling="no">
         </iframe>
@@ -112,19 +130,49 @@
 
     <div class="side-box">
 
-        <h2>⚙️ Trade Setup</h2>
+        <div class="panel">
 
-        <label>💰 Balance (USD $)</label>
+            <h2>⚙️ AI Trade Setup</h2>
 
-        <input type="number" id="balance" value="100">
+            <label>💰 Balance (USD)</label>
 
-        <button onclick="analyzeTrade()">
-            🔥 Analyze Trade
-        </button>
+            <input
+                type="number"
+                id="balance"
+                value="100"
+            >
 
-        <div class="result" id="result">
+            <button onclick="analyzeTrade()">
+                🔥 RUN AI ANALYSIS
+            </button>
 
-            Waiting For Analysis...
+        </div>
+
+        <div class="panel result" id="result">
+
+            Waiting For AI Analysis...
+
+        </div>
+
+        <div class="panel stats" id="stats">
+
+            <h2>📊 AI PERFORMANCE</h2>
+
+            <p>Total Trades: --</p>
+
+            <p>Wins: --</p>
+
+            <p>Losses: --</p>
+
+            <p>Win Rate: --</p>
+
+            <p>Risk Score: --</p>
+
+            <p>Volatility: --</p>
+
+            <p class="status">
+                AI STATUS: ONLINE
+            </p>
 
         </div>
 
@@ -142,7 +190,11 @@ async function analyzeTrade(){
     const result =
         document.getElementById("result");
 
-    result.innerHTML = "Analyzing Market...";
+    const stats =
+        document.getElementById("stats");
+
+    result.innerHTML =
+        "AI Processing Market Data...";
 
     try{
 
@@ -152,7 +204,11 @@ async function analyzeTrade(){
 
         const data = await response.json();
 
-        let signalClass = "buy";
+        let signalClass = "wait";
+
+        if(data.signal === "BUY"){
+            signalClass = "buy";
+        }
 
         if(data.signal === "SELL"){
             signalClass = "sell";
@@ -194,11 +250,34 @@ async function analyzeTrade(){
 
         `;
 
+        stats.innerHTML = `
+
+            <h2>📊 AI PERFORMANCE</h2>
+
+            <p>Total Trades: ${data.total_trades}</p>
+
+            <p>Wins: ${data.wins}</p>
+
+            <p>Losses: ${data.losses}</p>
+
+            <p>Win Rate: ${data.win_rate}</p>
+
+            <p>Risk Score: ${data.risk_score}</p>
+
+            <p>Volatility: ${data.volatility}</p>
+
+            <p class="status">
+                AI STATUS: ONLINE
+            </p>
+
+        `;
+
     }
 
     catch(error){
 
-        result.innerHTML = "Backend Connect Error";
+        result.innerHTML =
+            "AI Connection Error";
 
     }
 
