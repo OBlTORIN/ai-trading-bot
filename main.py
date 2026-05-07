@@ -4,6 +4,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 import yfinance as yf
 import pandas as pd
+import json
+import os
 
 app = FastAPI()
 
@@ -22,7 +24,48 @@ def home():
 
 
 # =========================
-# ANALYZE TIMEFRAME
+# MEMORY FILE
+# =========================
+
+MEMORY_FILE = "memory.json"
+
+if not os.path.exists(MEMORY_FILE):
+
+    with open(MEMORY_FILE, "w") as f:
+
+        json.dump({
+
+            "wins": 0,
+            "losses": 0,
+            "total": 0
+
+        }, f)
+
+
+# =========================
+# LOAD MEMORY
+# =========================
+
+def load_memory():
+
+    with open(MEMORY_FILE, "r") as f:
+
+        return json.load(f)
+
+
+# =========================
+# SAVE MEMORY
+# =========================
+
+def save_memory(data):
+
+    with open(MEMORY_FILE, "w") as f:
+
+        json.dump(data, f)
+
+
+# =========================
+# ANALYSIS
 # =========================
 
 def analyze_timeframe(interval):
@@ -36,6 +79,7 @@ def analyze_timeframe(interval):
     df = df.dropna()
 
     if isinstance(df.columns, pd.MultiIndex):
+
         df.columns = df.columns.get_level_values(0)
 
     close = df["Close"]
@@ -94,31 +138,41 @@ def analyze_timeframe(interval):
     # TREND
 
     if current_ema20 > current_ema50:
+
         trend = "BUY"
+
     else:
+
         trend = "SELL"
 
     # RSI FILTER
 
     if current_rsi > 70:
+
         signal = "SELL"
 
     elif current_rsi < 35:
+
         signal = "BUY"
 
     else:
+
         signal = trend
 
-    # BREAKOUT DETECTION
+    # BREAKOUT
 
     breakout = False
 
     if current_price > resistance:
+
         breakout = True
+
         signal = "BUY"
 
     if current_price < support:
+
         breakout = True
+
         signal = "SELL"
 
     # CANDLE STRENGTH
@@ -146,8 +200,6 @@ def analyze_timeframe(interval):
 
         "price": current_price,
 
-        "rsi": round(current_rsi,1),
-
         "support": support,
 
         "resistance": resistance,
@@ -173,9 +225,11 @@ def signal(balance: float = 100):
     tf15 = analyze_timeframe("15m")
 
     signals = [
+
         tf1["signal"],
         tf5["signal"],
         tf15["signal"]
+
     ]
 
     buy_count = signals.count("BUY")
@@ -194,7 +248,7 @@ def signal(balance: float = 100):
 
     confidence = 60
 
-    # FINAL DECISION
+    # FINAL SIGNAL
 
     if buy_count >= 2:
 
@@ -235,14 +289,17 @@ def signal(balance: float = 100):
     # BREAKOUT BONUS
 
     if breakout:
+
         confidence += 10
 
     # STRONG CANDLE BONUS
 
     if candle_strength > 70:
+
         confidence += 10
 
     if confidence > 95:
+
         confidence = 95
 
     # LOT SIZE
@@ -252,6 +309,7 @@ def signal(balance: float = 100):
     sl_distance = abs(current_price - sl)
 
     if sl_distance == 0:
+
         sl_distance = 1
 
     lot = round(
@@ -260,9 +318,10 @@ def signal(balance: float = 100):
     )
 
     if lot < 0.01:
+
         lot = 0.01
 
-    # PROFIT / LOSS
+    # PROFIT LOSS
 
     profit = round(
         abs(tp - current_price) * lot * 10,
@@ -273,6 +332,29 @@ def signal(balance: float = 100):
         abs(sl - current_price) * lot * 10,
         2
     )
+
+    # =========================
+    # MEMORY STATS
+    # =========================
+
+    memory = load_memory()
+
+    total = memory["total"]
+
+    wins = memory["wins"]
+
+    losses = memory["losses"]
+
+    if total > 0:
+
+        win_rate = round(
+            (wins / total) * 100,
+            1
+        )
+
+    else:
+
+        win_rate = 0
 
     return {
 
@@ -290,7 +372,45 @@ def signal(balance: float = 100):
 
         "loss": loss,
 
-        "confidence": f"{confidence}%"
+        "confidence": f"{confidence}%",
+
+        "total_trades": total,
+
+        "wins": wins,
+
+        "losses": losses,
+
+        "win_rate": f"{win_rate}%"
+
+    }
+
+
+# =========================
+# MANUAL RESULT UPDATE
+# =========================
+
+@app.get("/update_result")
+def update_result(result: str):
+
+    memory = load_memory()
+
+    memory["total"] += 1
+
+    if result == "win":
+
+        memory["wins"] += 1
+
+    elif result == "loss":
+
+        memory["losses"] += 1
+
+    save_memory(memory)
+
+    return {
+
+        "message": "updated",
+
+        "memory": memory
 
     }
 
