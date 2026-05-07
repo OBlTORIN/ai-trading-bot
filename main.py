@@ -4,6 +4,10 @@ from fastapi.middleware.cors import CORSMiddleware
 
 import yfinance as yf
 import pandas as pd
+import numpy as np
+
+from sklearn.ensemble import RandomForestClassifier
+
 import json
 import os
 
@@ -42,20 +46,12 @@ if not os.path.exists(MEMORY_FILE):
         }, f)
 
 
-# =========================
-# LOAD MEMORY
-# =========================
-
 def load_memory():
 
     with open(MEMORY_FILE, "r") as f:
 
         return json.load(f)
 
-
-# =========================
-# SAVE MEMORY
-# =========================
 
 def save_memory(data):
 
@@ -65,15 +61,15 @@ def save_memory(data):
 
 
 # =========================
-# ANALYSIS
+# DOWNLOAD DATA
 # =========================
 
-def analyze_timeframe(interval):
+def get_data():
 
     df = yf.download(
         "GC=F",
-        period="5d",
-        interval=interval
+        period="30d",
+        interval="5m"
     )
 
     df = df.dropna()
@@ -82,19 +78,26 @@ def analyze_timeframe(interval):
 
         df.columns = df.columns.get_level_values(0)
 
+    return df
+
+
+# =========================
+# ADD FEATURES
+# =========================
+
+def add_features(df):
+
     close = df["Close"]
-
-    high = df["High"]
-
-    low = df["Low"]
-
-    open_price = df["Open"]
 
     # EMA
 
-    ema20 = close.ewm(span=20).mean()
+    df["EMA20"] = (
+        close.ewm(span=20).mean()
+    )
 
-    ema50 = close.ewm(span=50).mean()
+    df["EMA50"] = (
+        close.ewm(span=50).mean()
+    )
 
     # RSI
 
@@ -110,105 +113,48 @@ def analyze_timeframe(interval):
 
     rs = avg_gain / avg_loss
 
-    rsi = 100 - (100 / (1 + rs))
-
-    current_price = round(
-        float(close.iloc[-1]),
-        1
+    df["RSI"] = (
+        100 - (100 / (1 + rs))
     )
 
-    current_ema20 = float(ema20.iloc[-1])
+    # TARGET
 
-    current_ema50 = float(ema50.iloc[-1])
-
-    current_rsi = float(rsi.iloc[-1])
-
-    # SUPPORT / RESISTANCE
-
-    support = round(
-        float(low.tail(20).min()),
-        1
+    df["Target"] = np.where(
+        df["Close"].shift(-1) > df["Close"],
+        1,
+        0
     )
 
-    resistance = round(
-        float(high.tail(20).max()),
-        1
+    df = df.dropna()
+
+    return df
+
+
+# =========================
+# TRAIN MODEL
+# =========================
+
+def train_model(df):
+
+    features = [
+
+        "EMA20",
+        "EMA50",
+        "RSI"
+
+    ]
+
+    X = df[features]
+
+    y = df["Target"]
+
+    model = RandomForestClassifier(
+        n_estimators=100
     )
 
-    # TREND
+    model.fit(X, y)
 
-    if current_ema20 > current_ema50:
-
-        trend = "BUY"
-
-    else:
-
-        trend = "SELL"
-
-    # RSI FILTER
-
-    if current_rsi > 70:
-
-        signal = "SELL"
-
-    elif current_rsi < 35:
-
-        signal = "BUY"
-
-    else:
-
-        signal = trend
-
-    # BREAKOUT
-
-    breakout = False
-
-    if current_price > resistance:
-
-        breakout = True
-
-        signal = "BUY"
-
-    if current_price < support:
-
-        breakout = True
-
-        signal = "SELL"
-
-    # CANDLE STRENGTH
-
-    candle_body = abs(
-        close.iloc[-1] - open_price.iloc[-1]
-    )
-
-    candle_range = (
-        high.iloc[-1] - low.iloc[-1]
-    )
-
-    candle_strength = 0
-
-    if candle_range > 0:
-
-        candle_strength = round(
-            (candle_body / candle_range) * 100,
-            1
-        )
-
-    return {
-
-        "signal": signal,
-
-        "price": current_price,
-
-        "support": support,
-
-        "resistance": resistance,
-
-        "breakout": breakout,
-
-        "candle_strength": candle_strength
-
-    }
+    return model
 
 
 # =========================
@@ -218,39 +164,46 @@ def analyze_timeframe(interval):
 @app.get("/signal")
 def signal(balance: float = 100):
 
-    tf1 = analyze_timeframe("1m")
+    df = get_data()
 
-    tf5 = analyze_timeframe("5m")
+    df = add_features(df)
 
-    tf15 = analyze_timeframe("15m")
+    model = train_model(df)
 
-    signals = [
+    latest = df.iloc[-1]
 
-        tf1["signal"],
-        tf5["signal"],
-        tf15["signal"]
+    features = [[
 
-    ]
+        latest["EMA20"],
+        latest["EMA50"],
+        latest["RSI"]
 
-    buy_count = signals.count("BUY")
+    ]]
 
-    sell_count = signals.count("SELL")
+    prediction = model.predict(features)[0]
 
-    current_price = tf5["price"]
+    probability = max(
+        model.predict_proba(features)[0]
+    )
 
-    support = tf5["support"]
+    current_price = round(
+        float(latest["Close"]),
+        1
+    )
 
-    resistance = tf5["resistance"]
+    support = round(
+        float(df["Low"].tail(20).min()),
+        1
+    )
 
-    breakout = tf5["breakout"]
-
-    candle_strength = tf5["candle_strength"]
-
-    confidence = 60
+    resistance = round(
+        float(df["High"].tail(20).max()),
+        1
+    )
 
     # FINAL SIGNAL
 
-    if buy_count >= 2:
+    if prediction == 1:
 
         final_signal = "BUY"
 
@@ -262,9 +215,7 @@ def signal(balance: float = 100):
             1
         )
 
-        confidence += 15
-
-    elif sell_count >= 2:
+    else:
 
         final_signal = "SELL"
 
@@ -276,44 +227,32 @@ def signal(balance: float = 100):
             1
         )
 
-        confidence += 15
+    # CONFIDENCE
 
-    else:
+    confidence = round(
+        probability * 100,
+        1
+    )
+
+    if confidence < 50:
 
         final_signal = "WAIT"
-
-        sl = current_price
-
-        tp = current_price
-
-    # BREAKOUT BONUS
-
-    if breakout:
-
-        confidence += 10
-
-    # STRONG CANDLE BONUS
-
-    if candle_strength > 70:
-
-        confidence += 10
-
-    if confidence > 95:
-
-        confidence = 95
 
     # LOT SIZE
 
     risk_amount = balance * 0.02
 
-    sl_distance = abs(current_price - sl)
+    sl_distance = abs(
+        current_price - sl
+    )
 
     if sl_distance == 0:
 
         sl_distance = 1
 
     lot = round(
-        risk_amount / (sl_distance * 10),
+        risk_amount /
+        (sl_distance * 10),
         2
     )
 
@@ -321,21 +260,21 @@ def signal(balance: float = 100):
 
         lot = 0.01
 
-    # PROFIT LOSS
+    # PROFIT / LOSS
 
     profit = round(
-        abs(tp - current_price) * lot * 10,
+        abs(tp - current_price)
+        * lot * 10,
         2
     )
 
     loss = round(
-        abs(sl - current_price) * lot * 10,
+        abs(sl - current_price)
+        * lot * 10,
         2
     )
 
-    # =========================
-    # MEMORY STATS
-    # =========================
+    # MEMORY
 
     memory = load_memory()
 
@@ -386,7 +325,7 @@ def signal(balance: float = 100):
 
 
 # =========================
-# MANUAL RESULT UPDATE
+# UPDATE RESULT
 # =========================
 
 @app.get("/update_result")
