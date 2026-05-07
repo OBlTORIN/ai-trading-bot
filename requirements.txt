@@ -2,5 +2,6 @@ fastapi
 uvicorn
 yfinance
 pandas
-scikit-learn
 numpy
+scikit-learn
+tensorflow
