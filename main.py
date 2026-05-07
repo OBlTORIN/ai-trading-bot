@@ -1,7 +1,9 @@
 from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
-import random
+
+import yfinance as yf
+import pandas as pd
 
 app = FastAPI()
 
@@ -15,40 +17,110 @@ app.add_middleware(
 
 @app.get("/")
 def home():
+
     return FileResponse("index.html")
 
 
 @app.get("/signal")
 def signal(balance: float = 100):
 
-    current_price = round(random.uniform(4680, 4720), 1)
+    # REAL XAUUSD DATA
 
-    ema20 = random.uniform(4685, 4715)
-    ema50 = random.uniform(4685, 4715)
+    df = yf.download(
+        "GC=F",
+        period="5d",
+        interval="5m"
+    )
 
-    rsi = random.randint(30, 80)
+    if df.empty:
+        return {
+            "error": "No Market Data"
+        }
 
-    volume_strength = random.randint(50, 100)
+    df = df.dropna()
 
-    support = round(current_price - random.uniform(5, 15), 1)
-    resistance = round(current_price + random.uniform(5, 15), 1)
+    # FIX COLUMNS
 
-    # TREND DETECTION
+    if isinstance(df.columns, pd.MultiIndex):
+        df.columns = df.columns.get_level_values(0)
 
-    if ema20 > ema50:
+    close = df["Close"]
+
+    # REAL EMA
+
+    ema20 = close.ewm(span=20).mean()
+
+    ema50 = close.ewm(span=50).mean()
+
+    # REAL RSI
+
+    delta = close.diff()
+
+    gain = delta.clip(lower=0)
+
+    loss = -delta.clip(upper=0)
+
+    avg_gain = gain.rolling(14).mean()
+
+    avg_loss = loss.rolling(14).mean()
+
+    rs = avg_gain / avg_loss
+
+    rsi = 100 - (100 / (1 + rs))
+
+    # CURRENT VALUES
+
+    current_price = round(
+        float(close.iloc[-1]),
+        1
+    )
+
+    current_ema20 = round(
+        float(ema20.iloc[-1]),
+        1
+    )
+
+    current_ema50 = round(
+        float(ema50.iloc[-1]),
+        1
+    )
+
+    current_rsi = round(
+        float(rsi.iloc[-1]),
+        1
+    )
+
+    # SUPPORT / RESISTANCE
+
+    support = round(
+        float(df["Low"].tail(20).min()),
+        1
+    )
+
+    resistance = round(
+        float(df["High"].tail(20).max()),
+        1
+    )
+
+    # TREND
+
+    if current_ema20 > current_ema50:
         trend = "BUY"
     else:
         trend = "SELL"
 
-    # RSI FILTER
+    # SIGNAL LOGIC
 
-    if rsi > 70:
+    if current_rsi > 70:
+
         signal = "SELL"
 
-    elif rsi < 35:
+    elif current_rsi < 35:
+
         signal = "BUY"
 
     else:
+
         signal = trend
 
     # ENTRY / SL / TP
@@ -57,15 +129,21 @@ def signal(balance: float = 100):
 
     if signal == "BUY":
 
-        sl = round(entry - 10, 1)
+        sl = support
 
-        tp = round(entry + 20, 1)
+        tp = round(
+            entry + ((entry - sl) * 2),
+            1
+        )
 
     else:
 
-        sl = round(entry + 10, 1)
+        sl = resistance
 
-        tp = round(entry - 20, 1)
+        tp = round(
+            entry - ((sl - entry) * 2),
+            1
+        )
 
     # LOT SIZE
 
@@ -73,16 +151,28 @@ def signal(balance: float = 100):
 
     sl_distance = abs(entry - sl)
 
-    lot = round(risk_amount / (sl_distance * 10), 2)
+    if sl_distance == 0:
+        sl_distance = 1
+
+    lot = round(
+        risk_amount / (sl_distance * 10),
+        2
+    )
 
     if lot < 0.01:
         lot = 0.01
 
     # PROFIT / LOSS
 
-    profit = round(abs(tp - entry) * lot * 10, 2)
+    profit = round(
+        abs(tp - entry) * lot * 10,
+        2
+    )
 
-    loss = round(abs(sl - entry) * lot * 10, 2)
+    loss = round(
+        abs(sl - entry) * lot * 10,
+        2
+    )
 
     # CONFIDENCE
 
@@ -91,10 +181,10 @@ def signal(balance: float = 100):
     if trend == signal:
         confidence += 10
 
-    if volume_strength > 70:
+    if current_rsi < 35 or current_rsi > 70:
         confidence += 10
 
-    if rsi < 35 or rsi > 70:
+    if abs(current_ema20 - current_ema50) > 3:
         confidence += 10
 
     if confidence > 95:
@@ -116,19 +206,7 @@ def signal(balance: float = 100):
 
         "loss": loss,
 
-        "confidence": f"{confidence}%",
-
-        "ema20": round(ema20, 1),
-
-        "ema50": round(ema50, 1),
-
-        "rsi": rsi,
-
-        "volume": volume_strength,
-
-        "support": support,
-
-        "resistance": resistance
+        "confidence": f"{confidence}%"
 
     }
 
@@ -137,4 +215,8 @@ if __name__ == "__main__":
 
     import uvicorn
 
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(
+        app,
+        host="0.0.0.0",
+        port=8000
+    )
