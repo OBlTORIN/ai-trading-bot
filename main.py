@@ -6,7 +6,10 @@ import yfinance as yf
 import pandas as pd
 import numpy as np
 
-from sklearn.ensemble import RandomForestClassifier
+import tensorflow as tf
+
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense
 
 import json
 import os
@@ -61,7 +64,7 @@ def save_memory(data):
 
 
 # =========================
-# DOWNLOAD DATA
+# GET DATA
 # =========================
 
 def get_data():
@@ -82,7 +85,7 @@ def get_data():
 
 
 # =========================
-# ADD FEATURES
+# FEATURES
 # =========================
 
 def add_features(df):
@@ -120,9 +123,13 @@ def add_features(df):
     # TARGET
 
     df["Target"] = np.where(
-        df["Close"].shift(-1) > df["Close"],
+
+        df["Close"].shift(-1)
+        > df["Close"],
+
         1,
         0
+
     )
 
     df = df.dropna()
@@ -144,15 +151,56 @@ def train_model(df):
 
     ]
 
-    X = df[features]
+    X = df[features].values
 
-    y = df["Target"]
+    y = df["Target"].values
 
-    model = RandomForestClassifier(
-        n_estimators=100
+    model = Sequential()
+
+    model.add(
+        Dense(
+            32,
+            activation="relu",
+            input_shape=(3,)
+        )
     )
 
-    model.fit(X, y)
+    model.add(
+        Dense(
+            16,
+            activation="relu"
+        )
+    )
+
+    model.add(
+        Dense(
+            1,
+            activation="sigmoid"
+        )
+    )
+
+    model.compile(
+
+        optimizer="adam",
+
+        loss="binary_crossentropy",
+
+        metrics=["accuracy"]
+
+    )
+
+    model.fit(
+
+        X,
+        y,
+
+        epochs=10,
+
+        batch_size=32,
+
+        verbose=0
+
+    )
 
     return model
 
@@ -172,19 +220,18 @@ def signal(balance: float = 100):
 
     latest = df.iloc[-1]
 
-    features = [[
+    features = np.array([[
 
         latest["EMA20"],
         latest["EMA50"],
         latest["RSI"]
 
-    ]]
+    ]])
 
-    prediction = model.predict(features)[0]
-
-    probability = max(
-        model.predict_proba(features)[0]
-    )
+    prediction = model.predict(
+        features,
+        verbose=0
+    )[0][0]
 
     current_price = round(
         float(latest["Close"]),
@@ -203,40 +250,58 @@ def signal(balance: float = 100):
 
     # FINAL SIGNAL
 
-    if prediction == 1:
+    if prediction > 0.55:
 
         final_signal = "BUY"
 
         sl = support
 
         tp = round(
+
             current_price +
             ((current_price - sl) * 2),
+
             1
+
         )
 
-    else:
+    elif prediction < 0.45:
 
         final_signal = "SELL"
 
         sl = resistance
 
         tp = round(
+
             current_price -
             ((sl - current_price) * 2),
+
             1
+
         )
+
+    else:
+
+        final_signal = "WAIT"
+
+        sl = current_price
+
+        tp = current_price
 
     # CONFIDENCE
 
     confidence = round(
-        probability * 100,
+
+        abs(prediction - 0.5)
+        * 200,
+
         1
+
     )
 
     if confidence < 50:
 
-        final_signal = "WAIT"
+        confidence = 50
 
     # LOT SIZE
 
@@ -251,9 +316,12 @@ def signal(balance: float = 100):
         sl_distance = 1
 
     lot = round(
+
         risk_amount /
         (sl_distance * 10),
+
         2
+
     )
 
     if lot < 0.01:
@@ -263,15 +331,21 @@ def signal(balance: float = 100):
     # PROFIT / LOSS
 
     profit = round(
+
         abs(tp - current_price)
         * lot * 10,
+
         2
+
     )
 
     loss = round(
+
         abs(sl - current_price)
         * lot * 10,
+
         2
+
     )
 
     # MEMORY
@@ -287,8 +361,11 @@ def signal(balance: float = 100):
     if total > 0:
 
         win_rate = round(
+
             (wins / total) * 100,
+
             1
+
         )
 
     else:
